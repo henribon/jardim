@@ -69,7 +69,8 @@ async function start() {
   const map = new MapView($('map'), garden, {
     onSelect: openIdea,
     onAdd: addIdea,
-    onBackground: () => card.close()
+    onBackground: () => card.close(),
+    coveredFrom: () => ($('card').classList.contains('open') ? $('card').offsetLeft : null)
   });
 
   const card = new CardView($('card'), garden, {

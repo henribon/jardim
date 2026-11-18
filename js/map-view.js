@@ -10,6 +10,7 @@ const FIT_PADDING = 64;
 const COMPACT_WIDTH = 640;
 const MIN_FIT_ZOOM = 0.6;
 const COMPACT_CORE_INSET = 64;
+const MIN_VISIBLE_WIDTH = 240;
 
 export class MapView {
   #el;
@@ -159,13 +160,20 @@ export class MapView {
     this.#pendingReveal = null;
     const el = this.#nodes.get(id);
     if (!el) return;
-    const frame = this.#el.getBoundingClientRect();
+    const area = this.#visibleArea();
     const rect = el.getBoundingClientRect();
-    const inside = rect.left > frame.left && rect.right < frame.right && rect.top > frame.top && rect.bottom < frame.bottom;
+    const inside = rect.left > area.left && rect.right < area.right && rect.top > area.top && rect.bottom < area.bottom;
     if (inside) return;
-    this.#view.x -= rect.left + rect.width / 2 - (frame.left + frame.width / 2);
-    this.#view.y -= rect.top + rect.height / 2 - (frame.top + frame.height / 2);
+    this.#view.x -= rect.left + rect.width / 2 - (area.left + area.right) / 2;
+    this.#view.y -= rect.top + rect.height / 2 - (area.top + area.bottom) / 2;
     this.#apply();
+  }
+
+  #visibleArea() {
+    const { left, right, top, bottom } = this.#el.getBoundingClientRect();
+    const coveredFrom = this.#events.coveredFrom?.() ?? right;
+    const usable = coveredFrom - left >= MIN_VISIBLE_WIDTH;
+    return { left, top, bottom, right: usable ? coveredFrom : right };
   }
 
   #apply() {
