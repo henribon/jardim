@@ -31,18 +31,23 @@ function askForLogin(auth) {
   const screen = $('login');
   const form = $('loginForm');
   const error = $('loginError');
+  const submit = form.querySelector('button');
   screen.hidden = false;
+  form.elements.email.focus();
   return new Promise(resolve => {
     form.addEventListener('submit', async event => {
       event.preventDefault();
       error.textContent = '';
-      const { email, password } = Object.fromEntries(new FormData(form));
+      submit.disabled = true;
       try {
-        const user = await auth.signIn(email, password);
+        const user = await auth.signIn(form.elements.email.value, form.elements.code.value);
         screen.hidden = true;
         resolve(user);
       } catch {
-        error.textContent = 'email ou senha inválidos';
+        error.textContent = 'email ou código inválido';
+        form.elements.code.select();
+      } finally {
+        submit.disabled = false;
       }
     });
   });

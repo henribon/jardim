@@ -26,7 +26,7 @@ Sem o Supabase configurado, o app roda em **modo local**: os dados ficam só no 
 1. Crie um projeto em supabase.com.
 2. Em **SQL Editor**, rode o conteúdo de `supabase/schema.sql`. Ele cria a tabela `ideas`, o bucket de imagens `ideas` e as regras de acesso, para que só o dono veja os próprios dados.
 3. Em **Authentication → Sign In / Providers**, desative **Allow new users to sign up**. Assim ninguém mais consegue criar conta.
-4. Em **Authentication → Users → Add user**, crie o seu usuário (email e senha) com **Auto Confirm User** marcado.
+4. Em **Authentication → Users → Add user**, crie o seu usuário com **seu email** e o **código de acesso** que você escolher como senha (mínimo de 6 caracteres). Marque **Auto Confirm User**.
 5. Em **Project Settings → API**, copie a **Project URL** e a chave **anon public** e cole em `js/config.js`:
 
 ```js
@@ -37,6 +37,8 @@ export const config = {
 ```
 
 A chave anon é pública por natureza. Quem protege os dados são as regras do `schema.sql`.
+
+No site, você entra uma vez em cada aparelho com seu email e o código. A sessão fica salva e é renovada sozinha, então você continua logado até clicar em sair.
 
 ## Publicar no GitHub Pages
 

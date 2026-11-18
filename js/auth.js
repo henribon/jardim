@@ -4,7 +4,9 @@ export class Auth {
   #client;
 
   constructor({ supabaseUrl, supabaseAnonKey }) {
-    this.#client = createClient(supabaseUrl, supabaseAnonKey);
+    this.#client = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: { persistSession: true, autoRefreshToken: true }
+    });
   }
 
   get client() {
@@ -16,8 +18,8 @@ export class Auth {
     return data.session?.user ?? null;
   }
 
-  async signIn(email, password) {
-    const { data, error } = await this.#client.auth.signInWithPassword({ email, password });
+  async signIn(email, code) {
+    const { data, error } = await this.#client.auth.signInWithPassword({ email: email.trim(), password: code });
     if (error) throw error;
     return data.user;
   }
