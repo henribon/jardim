@@ -21,28 +21,34 @@ export function layoutMindMap(garden, { singleSide = false } = {}) {
   const nodes = [];
   const links = [];
 
-  const place = (idea, depth, top, dir, parentId) => {
+  const place = (idea, depth, top, dir, parent) => {
     const weight = weights.get(idea.id);
+    const shift = { x: parent.shift.x + idea.offsetX, y: parent.shift.y + idea.offsetY };
+    const tint = idea.color ?? parent.tint;
     nodes.push({
       id: idea.id,
       title: idea.title,
+      color: idea.color,
+      icon: idea.icon,
+      tint,
       depth,
       dir,
-      x: dir * (FIRST_COLUMN + (depth - 1) * COLUMN_WIDTH),
-      y: (top + weight / 2) * ROW_HEIGHT
+      x: dir * (FIRST_COLUMN + (depth - 1) * COLUMN_WIDTH) + shift.x,
+      y: (top + weight / 2) * ROW_HEIGHT + shift.y
     });
-    links.push({ from: parentId, to: idea.id, dir });
+    links.push({ from: parent.id, to: idea.id, dir, tint });
     let childTop = top;
     garden.childrenOf(idea.id).forEach(child => {
-      place(child, depth + 1, childTop, dir, idea.id);
+      place(child, depth + 1, childTop, dir, { id: idea.id, shift, tint });
       childTop += weights.get(child.id);
     });
   };
 
+  const core = { id: null, shift: { x: 0, y: 0 }, tint: null };
   for (const { dir, ideas, total } of sides) {
     let top = -total / 2;
     ideas.forEach(root => {
-      place(root, 1, top, dir, null);
+      place(root, 1, top, dir, core);
       top += weights.get(root.id);
     });
   }

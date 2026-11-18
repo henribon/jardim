@@ -1,5 +1,7 @@
 import { h } from './dom.js';
 import { layoutMindMap } from './map-layout.js';
+import { colorHex, readableTextOn } from './palette.js';
+import { iconSvg } from './icons.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const CORE_RADIUS = 38;
@@ -11,11 +13,12 @@ const COMPACT_WIDTH = 640;
 const MIN_FIT_ZOOM = 0.6;
 const COMPACT_CORE_INSET = 64;
 const MIN_VISIBLE_WIDTH = 240;
+const UNTITLED = 'sem título';
 
 export class MapView {
   #el;
   #world;
-  #path;
+  #links;
   #core;
   #garden;
   #events;
@@ -33,10 +36,9 @@ export class MapView {
     this.#el = el;
     this.#garden = garden;
     this.#events = events;
-    this.#path = document.createElementNS(SVG_NS, 'path');
-    this.#path.setAttribute('class', 'links');
+    this.#links = document.createElementNS(SVG_NS, 'g');
     const svg = document.createElementNS(SVG_NS, 'svg');
-    svg.append(this.#path);
+    svg.append(this.#links);
     this.#core = h('div', { class: 'core', textContent: 'jardim' });
     this.#world = h('div', { class: 'world' }, svg, this.#core);
     el.append(this.#world);
@@ -111,7 +113,7 @@ export class MapView {
       el.remove();
       this.#nodes.delete(id);
     }
-    this.#path.setAttribute('d', this.#linkPath(nodes, links));
+    this.#drawLinks(nodes, links);
     if (!this.#fitted && nodes.length) {
       this.#fitted = true;
       this.fit();
@@ -123,7 +125,7 @@ export class MapView {
 
   #createNode(id) {
     const el = h('div', { class: 'node' },
-      h('span', { class: 'label' }),
+      h('span', { class: 'label' }, h('span', { class: 'glyph' }), h('span', { class: 'text' })),
       h('button', { class: 'add', textContent: '+', 'aria-label': 'Adicionar sub-ideia' }));
     el.dataset.id = id;
     this.#world.append(el);
@@ -131,29 +133,56 @@ export class MapView {
     return el;
   }
 
-  #updateNode(el, { id, title, depth, dir, x, y }) {
-    el.className = `node depth-${Math.min(depth, 3)} ${dir < 0 ? 'left' : 'right'}${id === this.#selected ? ' selected' : ''}`;
+  #updateNode(el, { id, title, color, icon, tint, depth, dir, x, y }) {
+    const classes = ['node', `depth-${Math.min(depth, 3)}`, dir < 0 ? 'left' : 'right'];
+    if (id === this.#selected) classes.push('selected');
+    if (el.classList.contains('dragging')) classes.push('dragging');
+    el.className = classes.join(' ');
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
     el.style.transform = dir < 0 ? 'translate(-100%,-50%)' : 'translate(0,-50%)';
-    const label = el.firstChild;
-    label.textContent = title.trim() || 'sem título';
+    const [label] = el.children;
+    const [glyph, text] = label.children;
+    text.textContent = title.trim() || UNTITLED;
     label.classList.toggle('untitled', !title.trim());
+    this.#paint(label, colorHex(color), colorHex(tint));
+    if (glyph.dataset.icon !== (icon ?? '')) {
+      glyph.dataset.icon = icon ?? '';
+      glyph.innerHTML = icon ? iconSvg(icon, 15) : '';
+    }
+    glyph.hidden = !icon;
   }
 
-  #linkPath(nodes, links) {
+  #paint(label, fill, tint) {
+    label.classList.toggle('filled', Boolean(fill));
+    label.style.setProperty('--fill', fill ?? 'transparent');
+    label.style.setProperty('--ink', fill ? readableTextOn(fill) : 'inherit');
+    label.style.setProperty('--tint', tint ?? 'var(--line2)');
+  }
+
+  #drawLinks(nodes, links) {
     const byId = new Map(nodes.map(node => [node.id, node]));
     const outlet = (id, dir) => {
       if (!id) return { x: dir * CORE_RADIUS, y: 0 };
       const node = byId.get(id);
       return { x: node.x + dir * this.#nodes.get(id).firstChild.offsetWidth, y: node.y };
     };
-    return links.map(({ from, to, dir }) => {
+    const groups = new Map();
+    for (const { from, to, dir, tint } of links) {
       const a = outlet(from, dir);
       const b = byId.get(to);
       const mid = (a.x + b.x) / 2;
-      return `M${a.x},${a.y}C${mid},${a.y} ${mid},${b.y} ${b.x},${b.y}`;
-    }).join('');
+      const key = colorHex(tint) ?? '';
+      groups.set(key, (groups.get(key) ?? '') + `M${a.x},${a.y}C${mid},${a.y} ${mid},${b.y} ${b.x},${b.y}`);
+    }
+    const paths = [...groups].map(([stroke, d]) => {
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('class', stroke ? 'links tinted' : 'links');
+      if (stroke) path.style.stroke = stroke;
+      path.setAttribute('d', d);
+      return path;
+    });
+    this.#links.replaceChildren(...paths);
   }
 
   #revealNow(id) {
@@ -199,7 +228,8 @@ export class MapView {
     el.addEventListener('pointerdown', event => {
       el.setPointerCapture(event.pointerId);
       this.#pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      this.#gesture = this.#pointers.size === 1 ? this.#startPan(event) : this.#startPinch();
+      this.#gesture?.end?.();
+      this.#gesture = this.#pointers.size === 1 ? this.#startSingle(event) : this.#startPinch();
     });
     el.addEventListener('pointermove', event => {
       if (!this.#pointers.has(event.pointerId)) return;
@@ -210,6 +240,7 @@ export class MapView {
       if (!this.#pointers.has(event.pointerId)) return;
       this.#pointers.delete(event.pointerId);
       if (event.type === 'pointerup' && this.#gesture?.isTap()) this.#tap(this.#gesture.target);
+      this.#gesture?.end?.();
       this.#gesture = null;
       el.classList.remove('grabbing');
     };
@@ -220,6 +251,35 @@ export class MapView {
       const { x, y } = this.#local(event.clientX, event.clientY);
       this.#zoomAt(Math.exp(-event.deltaY * 0.0015), x, y);
     }, { passive: false });
+  }
+
+  #startSingle(event) {
+    const node = event.target.closest?.('.node');
+    if (node && !event.target.closest('.add')) return this.#startNodeDrag(event, node);
+    return this.#startPan(event);
+  }
+
+  #startNodeDrag(event, el) {
+    const idea = this.#garden.get(el.dataset.id);
+    const start = { x: event.clientX, y: event.clientY, ox: idea.offsetX, oy: idea.offsetY };
+    let moved = false;
+    return {
+      target: event.target,
+      isTap: () => !moved,
+      move: () => {
+        const [pointer] = this.#pointers.values();
+        const dx = pointer.x - start.x;
+        const dy = pointer.y - start.y;
+        if (!moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        if (!moved) el.classList.add('dragging');
+        moved = true;
+        this.#garden.edit(idea.id, {
+          offsetX: Math.round(start.ox + dx / this.#view.k),
+          offsetY: Math.round(start.oy + dy / this.#view.k)
+        });
+      },
+      end: () => el.classList.remove('dragging')
+    };
   }
 
   #startPan(event) {

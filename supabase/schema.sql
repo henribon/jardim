@@ -5,6 +5,10 @@ create table if not exists public.ideas (
   title text not null default '',
   blocks jsonb not null default '[]'::jsonb,
   position double precision not null default 0,
+  color text,
+  icon text,
+  offset_x double precision not null default 0,
+  offset_y double precision not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

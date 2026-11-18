@@ -1,6 +1,8 @@
 import { h, autosize } from './dom.js';
 import { renderBlock, isUrl } from './blocks.js';
 import { compressImage } from './image.js';
+import { PALETTE, colorHex } from './palette.js';
+import { ICONS, iconSvg } from './icons.js';
 
 const UNTITLED = 'sem título';
 
@@ -14,6 +16,8 @@ export class CardView {
   #crumbs;
   #children;
   #files;
+  #look;
+  #reset;
 
   constructor(el, garden, events) {
     this.#el = el;
@@ -79,6 +83,8 @@ export class CardView {
     this.#blocks = h('div', { class: 'blocks' });
     this.#crumbs = h('nav', { class: 'crumbs' });
     this.#children = h('div', { class: 'children' });
+    this.#look = h('div', { class: 'look' });
+    this.#reset = h('button', { class: 'quiet', textContent: 'posição original', onclick: () => this.#garden.edit(this.#id, { offsetX: 0, offsetY: 0 }) });
     this.#files = h('input', {
       type: 'file',
       accept: 'image/*',
@@ -95,6 +101,7 @@ export class CardView {
         this.#crumbs,
         h('button', { class: 'icon-btn', textContent: '×', 'aria-label': 'Fechar', onclick: () => this.close() })),
       h('div', { class: 'card-body' },
+        this.#look,
         this.#title,
         this.#blocks,
         h('div', { class: 'adders' },
@@ -106,11 +113,60 @@ export class CardView {
           h('h3', { textContent: 'sub-ideias' }),
           this.#children)),
       h('div', { class: 'card-foot' },
+        this.#reset,
         h('button', { class: 'danger', textContent: 'excluir ideia', onclick: () => this.#delete() })));
 
     requestAnimationFrame(() => autosize(this.#title));
+    this.#renderLook();
     this.#renderBlocks();
     this.#refreshStructure();
+  }
+
+  #renderLook(picking = false) {
+    const idea = this.#idea();
+    const hex = colorHex(idea.color);
+    const iconButton = h('button', {
+      class: `icon-slot${idea.icon ? '' : ' unset'}`,
+      'aria-label': 'Escolher ícone',
+      onclick: () => this.#renderLook(!picking)
+    });
+    iconButton.innerHTML = idea.icon ? iconSvg(idea.icon, 26) : iconSvg('smile', 18);
+    if (hex) iconButton.style.color = hex;
+    const swatches = [null, ...PALETTE].map(color => h('button', {
+      class: `swatch${(color?.id ?? null) === idea.color ? ' on' : ''}${color ? '' : ' none'}`,
+      title: color ? `${color.name} · ${color.year}` : 'sem cor',
+      'aria-label': color ? color.name : 'Sem cor',
+      style: color ? `--swatch:${color.hex}` : '',
+      onclick: () => {
+        this.#garden.edit(this.#id, { color: color?.id ?? null });
+        this.#renderLook(picking);
+      }
+    }));
+    const row = h('div', { class: 'look-row' }, iconButton, h('div', { class: 'swatches' }, swatches));
+    this.#look.replaceChildren(...(picking ? [row, this.#iconPicker(idea)] : [row]));
+  }
+
+  #iconPicker(idea) {
+    const grid = h('div', { class: 'icon-grid' });
+    const choose = icon => {
+      this.#garden.edit(this.#id, { icon });
+      this.#renderLook(false);
+    };
+    const fill = query => {
+      const term = query.trim().toLowerCase();
+      const matches = ICONS.filter(icon => !term || icon.label.includes(term) || icon.id.includes(term));
+      grid.replaceChildren(...matches.map(icon => {
+        const button = h('button', { title: icon.label, 'aria-label': icon.label, class: icon.id === idea.icon ? 'on' : '', onclick: () => choose(icon.id) });
+        button.innerHTML = iconSvg(icon.id, 18);
+        return button;
+      }));
+    };
+    const search = h('input', { type: 'search', placeholder: 'buscar ícone…', oninput: event => fill(event.target.value) });
+    fill('');
+    requestAnimationFrame(() => search.focus());
+    return h('div', { class: 'picker' },
+      h('div', { class: 'picker-head' }, search, idea.icon ? h('button', { class: 'quiet', textContent: 'remover', onclick: () => choose(null) }) : null),
+      grid);
   }
 
   #renderBlocks(focusLast = false) {
@@ -182,11 +238,13 @@ export class CardView {
 
   #refreshStructure() {
     if (!this.#id) return;
-    if (!this.#idea()) {
+    const idea = this.#idea();
+    if (!idea) {
       this.#id = null;
       this.#hide();
       return;
     }
+    this.#reset.hidden = !idea.offsetX && !idea.offsetY;
     const crumbs = this.#garden.ancestors(this.#id).flatMap(ancestor => [
       h('button', { textContent: ancestor.title.trim() || UNTITLED, onclick: () => this.#events.onNavigate(ancestor.id) }),
       h('i', { textContent: '/' })

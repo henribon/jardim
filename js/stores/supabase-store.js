@@ -1,12 +1,14 @@
 const TABLE = 'ideas';
 const BUCKET = 'ideas';
-const COLUMNS = 'id,parent_id,title,blocks,position';
+const FIELDS = ['id', 'parentId', 'title', 'blocks', 'position', 'color', 'icon', 'offsetX', 'offsetY'];
 const SIGNED_URL_TTL = 3600;
 const RENEW_MARGIN_MS = 60_000;
 
-const toIdea = row => ({ id: row.id, parentId: row.parent_id, title: row.title, blocks: row.blocks, position: row.position });
+const toColumn = field => field.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 
-const toRow = ({ parentId, ...rest }) => (parentId === undefined ? rest : { ...rest, parent_id: parentId });
+const toIdea = row => Object.fromEntries(FIELDS.filter(field => toColumn(field) in row).map(field => [field, row[toColumn(field)]]));
+
+const toRow = idea => Object.fromEntries(Object.entries(idea).map(([field, value]) => [toColumn(field), value]));
 
 export class SupabaseStore {
   #client;
@@ -23,13 +25,13 @@ export class SupabaseStore {
   }
 
   async list() {
-    const { data, error } = await this.#client.from(TABLE).select(COLUMNS).order('position');
+    const { data, error } = await this.#client.from(TABLE).select('*').order('position');
     if (error) throw error;
     return data.map(toIdea);
   }
 
   async create(draft) {
-    const { data, error } = await this.#client.from(TABLE).insert(toRow(draft)).select(COLUMNS).single();
+    const { data, error } = await this.#client.from(TABLE).insert(toRow(draft)).select('*').single();
     if (error) throw error;
     return toIdea(data);
   }

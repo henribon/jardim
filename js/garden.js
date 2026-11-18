@@ -1,5 +1,13 @@
 const SAVE_DELAY = 500;
 
+const DEFAULTS = { title: '', blocks: [], color: null, icon: null, offsetX: 0, offsetY: 0 };
+
+const withDefaults = idea => {
+  const merged = { ...DEFAULTS, ...idea, parentId: idea.parentId ?? null };
+  for (const [field, fallback] of Object.entries(DEFAULTS)) merged[field] ??= fallback;
+  return merged;
+};
+
 export class Garden {
   #store;
   #onError;
@@ -7,6 +15,7 @@ export class Garden {
   #children = new Map();
   #listeners = new Set();
   #timers = new Map();
+  #dirty = new Map();
 
   constructor(store, onError) {
     this.#store = store;
@@ -19,7 +28,7 @@ export class Garden {
 
   async load() {
     const ideas = await this.#guard(() => this.#store.list(), 'não foi possível carregar o jardim');
-    this.#ideas = new Map((ideas ?? []).map(idea => [idea.id, idea]));
+    this.#ideas = new Map((ideas ?? []).map(idea => [idea.id, withDefaults(idea)]));
     this.#changed();
   }
 
@@ -58,22 +67,25 @@ export class Garden {
 
   isBlank(id) {
     const idea = this.get(id);
-    return Boolean(idea) && !idea.title.trim() && !idea.blocks.length && !this.childrenOf(id).length;
+    return Boolean(idea) && !idea.title.trim() && !idea.blocks.length && !idea.icon && !this.childrenOf(id).length;
   }
 
   async add(parentId = null) {
     const draft = { parentId, title: '', blocks: [], position: Date.now() };
     const idea = await this.#guard(() => this.#store.create(draft), 'não foi possível criar a ideia');
     if (!idea) return null;
-    this.#ideas.set(idea.id, idea);
+    this.#ideas.set(idea.id, withDefaults(idea));
     this.#changed();
-    return idea;
+    return this.get(idea.id);
   }
 
   edit(id, patch) {
     const idea = this.get(id);
     if (!idea) return;
     Object.assign(idea, patch);
+    const fields = this.#dirty.get(id) ?? new Set();
+    Object.keys(patch).forEach(field => fields.add(field));
+    this.#dirty.set(id, fields);
     this.#emit();
     this.#scheduleSave(id);
   }
@@ -83,6 +95,7 @@ export class Garden {
     const blocks = ids.flatMap(ideaId => this.get(ideaId)?.blocks ?? []);
     ids.forEach(ideaId => {
       this.#cancelSave(ideaId);
+      this.#dirty.delete(ideaId);
       this.#ideas.delete(ideaId);
     });
     this.#changed();
@@ -123,8 +136,11 @@ export class Garden {
   #save(id) {
     this.#timers.delete(id);
     const idea = this.get(id);
-    if (!idea) return Promise.resolve();
-    return this.#guard(() => this.#store.update(id, { title: idea.title, blocks: idea.blocks }), 'não foi possível salvar');
+    const fields = this.#dirty.get(id);
+    this.#dirty.delete(id);
+    if (!idea || !fields?.size) return Promise.resolve();
+    const patch = Object.fromEntries([...fields].map(field => [field, idea[field]]));
+    return this.#guard(() => this.#store.update(id, patch), 'não foi possível salvar');
   }
 
   #changed() {
