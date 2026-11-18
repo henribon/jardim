@@ -17,6 +17,8 @@ export class CardView {
   #children;
   #files;
   #look;
+  #connections;
+  #linker;
   #reset;
 
   constructor(el, garden, events) {
@@ -84,6 +86,8 @@ export class CardView {
     this.#crumbs = h('nav', { class: 'crumbs' });
     this.#children = h('div', { class: 'children' });
     this.#look = h('div', { class: 'look' });
+    this.#connections = h('div', { class: 'children' });
+    this.#linker = h('div', { class: 'linker' });
     this.#reset = h('button', { class: 'quiet', textContent: 'posição original', onclick: () => this.#garden.edit(this.#id, { offsetX: 0, offsetY: 0 }) });
     this.#files = h('input', {
       type: 'file',
@@ -111,7 +115,11 @@ export class CardView {
           this.#files),
         h('div', { class: 'section' },
           h('h3', { textContent: 'sub-ideias' }),
-          this.#children)),
+          this.#children),
+        h('div', { class: 'section' },
+          h('h3', { textContent: 'conexões' }),
+          this.#connections,
+          this.#linker)),
       h('div', { class: 'card-foot' },
         this.#reset,
         h('button', { class: 'danger', textContent: 'excluir ideia', onclick: () => this.#delete() })));
@@ -254,6 +262,48 @@ export class CardView {
       h('button', { textContent: child.title.trim() || UNTITLED, onclick: () => this.#events.onNavigate(child.id) }));
     this.#children.replaceChildren(...children,
       h('button', { class: 'new', textContent: '+ sub-ideia', onclick: () => this.#events.onAddChild(this.#id) }));
+    this.#renderConnections();
+  }
+
+  #renderConnections() {
+    const chips = this.#garden.connectionsOf(this.#id).map(other => h('span', { class: 'link-chip' },
+      h('button', { textContent: other.title.trim() || UNTITLED, title: this.#pathOf(other), onclick: () => this.#events.onNavigate(other.id) }),
+      h('button', { class: 'unlink', textContent: '×', 'aria-label': 'Desconectar', onclick: () => this.#garden.disconnect(this.#id, other.id) })));
+    this.#connections.replaceChildren(...chips,
+      h('button', { class: 'new', textContent: '+ conectar', onclick: () => this.#toggleLinker() }));
+  }
+
+  #toggleLinker() {
+    if (this.#linker.childElementCount) {
+      this.#linker.replaceChildren();
+      return;
+    }
+    const list = h('div', { class: 'link-list' });
+    const linked = new Set(this.#garden.connectionsOf(this.#id).map(other => other.id));
+    const candidates = this.#garden.descendantIds(null).slice(1)
+      .map(id => this.#garden.get(id))
+      .filter(other => other && other.id !== this.#id && !linked.has(other.id));
+    const fill = query => {
+      const term = query.trim().toLowerCase();
+      const matches = candidates.filter(other => !term || (other.title || UNTITLED).toLowerCase().includes(term));
+      list.replaceChildren(...matches.map(other => h('button', {
+        onclick: () => {
+          this.#garden.connect(this.#id, other.id);
+          this.#linker.replaceChildren();
+        }
+      }, h('span', { textContent: other.title.trim() || UNTITLED }), h('small', { textContent: this.#pathOf(other, false) }))));
+      if (!matches.length) list.append(h('p', { class: 'muted-note', textContent: 'nenhuma ideia encontrada' }));
+    };
+    const search = h('input', { type: 'search', placeholder: 'buscar ideia para conectar…', oninput: event => fill(event.target.value) });
+    fill('');
+    this.#linker.replaceChildren(h('div', { class: 'picker' }, h('div', { class: 'picker-head' }, search), list));
+    requestAnimationFrame(() => search.focus());
+  }
+
+  #pathOf(idea, includeSelf = true) {
+    const names = this.#garden.ancestors(idea.id).map(ancestor => ancestor.title.trim() || UNTITLED);
+    if (includeSelf) names.push(idea.title.trim() || UNTITLED);
+    return names.join(' / ');
   }
 
   async #delete() {

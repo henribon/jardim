@@ -50,6 +50,7 @@ button{cursor:pointer}
 .node.dragging{cursor:grabbing;z-index:1}
 .node.dragging .label{box-shadow:0 8px 24px rgba(0,0,0,.5)}
 .links.tinted{opacity:.55}
+.cross{fill:none;stroke:var(--muted);stroke-width:1.2;stroke-dasharray:4 5;opacity:.7}
 .node .add{width:22px;height:22px;border-radius:50%;border:1px solid var(--line2);background:var(--bg);color:var(--muted);font-size:14px;line-height:1;display:grid;place-items:center;opacity:0;transition:opacity .25s var(--ease),color .25s var(--ease)}
 .node .add:hover{color:var(--fg)}
 .node:hover .add,.node.selected .add{opacity:1}
@@ -115,6 +116,18 @@ button{cursor:pointer}
 .icon-grid button{height:34px;display:grid;place-items:center;border-radius:8px;color:var(--solid);transition:background .2s var(--ease),color .2s var(--ease)}
 .icon-grid button:hover{background:rgba(255,255,255,.07);color:var(--fg)}
 .icon-grid button.on{background:rgba(255,255,255,.12);color:var(--fg)}
+.link-chip{display:inline-flex;align-items:center;max-width:100%;border:1px dashed var(--line2);border-radius:999px;background:var(--card);transition:border-color .3s var(--ease)}
+.link-chip:hover{border-color:var(--muted)}
+.children .link-chip button{border:0;background:none;padding:5px 4px 5px 12px}
+.children .link-chip .unlink{padding:5px 10px 5px 4px;color:var(--dim)}
+.children .link-chip .unlink:hover{color:var(--danger)}
+.linker{margin-top:10px}
+.linker:empty{display:none}
+.link-list{display:flex;flex-direction:column;max-height:220px;overflow:auto}
+.link-list button{display:flex;align-items:baseline;gap:8px;padding:7px 8px;border-radius:8px;text-align:left;color:var(--solid);transition:background .2s var(--ease)}
+.link-list button:hover{background:rgba(255,255,255,.07);color:var(--fg)}
+.link-list small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dim)}
+.muted-note{padding:8px;font-size:12px;color:var(--dim)}
 .quiet{font-size:12px;color:var(--muted);transition:color .3s var(--ease)}
 .quiet:hover{color:var(--fg)}
 .card-foot{display:flex;justify-content:space-between;align-items:center;padding:12px 22px;border-top:1px solid var(--line)}

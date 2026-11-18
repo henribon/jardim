@@ -9,6 +9,7 @@ create table if not exists public.ideas (
   icon text,
   offset_x double precision not null default 0,
   offset_y double precision not null default 0,
+  links jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

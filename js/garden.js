@@ -1,6 +1,6 @@
 const SAVE_DELAY = 500;
 
-const DEFAULTS = { title: '', blocks: [], color: null, icon: null, offsetX: 0, offsetY: 0 };
+const DEFAULTS = { title: '', blocks: [], color: null, icon: null, offsetX: 0, offsetY: 0, links: [] };
 
 const withDefaults = idea => {
   const merged = { ...DEFAULTS, ...idea, parentId: idea.parentId ?? null };
@@ -70,8 +70,43 @@ export class Garden {
     return Boolean(idea) && !idea.title.trim() && !idea.blocks.length && !idea.icon && !this.childrenOf(id).length;
   }
 
+  connectionsOf(id) {
+    const idea = this.get(id);
+    if (!idea) return [];
+    const ids = new Set(idea.links.filter(linked => this.#ideas.has(linked)));
+    for (const other of this.#ideas.values()) if (other.links.includes(id)) ids.add(other.id);
+    ids.delete(id);
+    return [...ids].map(linked => this.get(linked));
+  }
+
+  connections() {
+    const pairs = new Map();
+    for (const idea of this.#ideas.values()) {
+      for (const linked of idea.links) {
+        if (!this.#ideas.has(linked) || linked === idea.id) continue;
+        const key = [idea.id, linked].sort().join('|');
+        pairs.set(key, [idea.id, linked]);
+      }
+    }
+    return [...pairs.values()];
+  }
+
+  connect(id, otherId) {
+    const idea = this.get(id);
+    if (!idea || id === otherId || this.connectionsOf(id).some(other => other.id === otherId)) return;
+    this.edit(id, { links: [...idea.links, otherId] });
+  }
+
+  disconnect(id, otherId) {
+    [[id, otherId], [otherId, id]].forEach(([from, to]) => {
+      const idea = this.get(from);
+      if (idea?.links.includes(to)) this.edit(from, { links: idea.links.filter(linked => linked !== to) });
+    });
+  }
+
   async add(parentId = null) {
-    const draft = { parentId, title: '', blocks: [], position: Date.now() };
+    const color = this.get(parentId)?.color ?? null;
+    const draft = { parentId, title: '', blocks: [], position: Date.now(), ...(color && { color }) };
     const idea = await this.#guard(() => this.#store.create(draft), 'não foi possível criar a ideia');
     if (!idea) return null;
     this.#ideas.set(idea.id, withDefaults(idea));
@@ -99,6 +134,7 @@ export class Garden {
       this.#ideas.delete(ideaId);
     });
     this.#changed();
+    this.#forgetLinks(new Set(ids));
     await this.#guard(() => this.#store.remove(ids), 'não foi possível excluir');
     this.discardImages(blocks);
   }
@@ -121,6 +157,12 @@ export class Garden {
       this.#cancelSave(id);
       return this.#save(id);
     }));
+  }
+
+  #forgetLinks(removed) {
+    for (const idea of this.#ideas.values()) {
+      if (idea.links.some(linked => removed.has(linked))) this.edit(idea.id, { links: idea.links.filter(linked => !removed.has(linked)) });
+    }
   }
 
   #scheduleSave(id) {

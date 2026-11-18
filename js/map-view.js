@@ -14,6 +14,7 @@ const MIN_FIT_ZOOM = 0.6;
 const COMPACT_CORE_INSET = 64;
 const MIN_VISIBLE_WIDTH = 240;
 const UNTITLED = 'sem título';
+const CROSS_BEND = 0.18;
 
 export class MapView {
   #el;
@@ -175,14 +176,35 @@ export class MapView {
       const key = colorHex(tint) ?? '';
       groups.set(key, (groups.get(key) ?? '') + `M${a.x},${a.y}C${mid},${a.y} ${mid},${b.y} ${b.x},${b.y}`);
     }
-    const paths = [...groups].map(([stroke, d]) => {
-      const path = document.createElementNS(SVG_NS, 'path');
-      path.setAttribute('class', stroke ? 'links tinted' : 'links');
-      if (stroke) path.style.stroke = stroke;
-      path.setAttribute('d', d);
-      return path;
-    });
-    this.#links.replaceChildren(...paths);
+    const paths = [...groups].map(([stroke, d]) => this.#path(stroke ? 'links tinted' : 'links', d, stroke));
+    const cross = this.#crossLinks(byId);
+    this.#links.replaceChildren(...paths, ...(cross ? [this.#path('cross', cross)] : []));
+  }
+
+  #crossLinks(byId) {
+    const center = id => {
+      const node = byId.get(id);
+      return { x: node.x + node.dir * this.#nodes.get(id).firstChild.offsetWidth / 2, y: node.y };
+    };
+    return this.#garden.connections()
+      .filter(([a, b]) => byId.has(a) && byId.has(b))
+      .map(([a, b]) => {
+        const from = center(a);
+        const to = center(b);
+        const bend = CROSS_BEND * Math.hypot(to.x - from.x, to.y - from.y);
+        const angle = Math.atan2(to.y - from.y, to.x - from.x) - Math.PI / 2;
+        const cx = (from.x + to.x) / 2 + Math.cos(angle) * bend;
+        const cy = (from.y + to.y) / 2 + Math.sin(angle) * bend;
+        return `M${from.x},${from.y}Q${cx},${cy} ${to.x},${to.y}`;
+      }).join('');
+  }
+
+  #path(className, d, stroke) {
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('class', className);
+    if (stroke) path.style.stroke = stroke;
+    path.setAttribute('d', d);
+    return path;
   }
 
   #revealNow(id) {

@@ -1,6 +1,6 @@
 const TABLE = 'ideas';
 const BUCKET = 'ideas';
-const FIELDS = ['id', 'parentId', 'title', 'blocks', 'position', 'color', 'icon', 'offsetX', 'offsetY'];
+const FIELDS = ['id', 'parentId', 'title', 'blocks', 'position', 'color', 'icon', 'offsetX', 'offsetY', 'links'];
 const SIGNED_URL_TTL = 3600;
 const RENEW_MARGIN_MS = 60_000;
 
